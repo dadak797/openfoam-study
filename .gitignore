@@ -1,0 +1,9 @@
+.vscode/
+
+# Binary files
+main
+
+# Result files
+coeffs.dat
+solutions.dat
+sources.dat
