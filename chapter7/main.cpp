@@ -13,6 +13,22 @@ class Function1 {
 
   static constexpr const char* typeName_{"Function1"};
   static const std::string typeName;
+
+  using Function1Ptr = std::unique_ptr<Function1>(*)();
+  using Function1Table = std::map<std::string, Function1Ptr>;
+  static Function1Table Function1RTStable;
+
+  template <typename derivedType>
+  class AddToTable {
+  public:
+    static std::unique_ptr<Function1> factory() {
+      return std::unique_ptr<Function1>(new derivedType());
+    }
+
+    AddToTable(const std::string& name = derivedType::typeName) {
+      Function1::Function1RTStable.insert(std::pair<std::string, Function1Ptr>(name, factory));
+    }
+  };
 };
 
 class Sqr : public Function1 {
@@ -54,61 +70,22 @@ class Cubic : public Function1 {
   static const std::string typeName;
 };
 
-std::unique_ptr<Function1> Sqr_factory() {
-  std::cout << "sqr object created" << std::endl;
-  return std::unique_ptr<Function1>(new Sqr());
-}
-
-std::unique_ptr<Function1> Sqrt_factory() {
-  std::cout << "sqrt object created" << std::endl;
-  return std::unique_ptr<Function1>(new Sqrt());
-}
-
-std::unique_ptr<Function1> Cubic_factory() {
-  std::cout << "cubic object created" << std::endl;
-  return std::unique_ptr<Function1>(new Cubic());
-}
-
-using Function1Ptr = std::unique_ptr<Function1>(*)();
-std::map<std::string, Function1Ptr> Function1RTStable;
-
-class SqrAddToTable {
- public:
-  SqrAddToTable(const std::string& name = Sqr::typeName) {
-    Function1RTStable.insert(std::pair<std::string, Function1Ptr>(name, Sqr_factory));
-  }
-};
-
-class SqrtAddToTable {
- public:
-  SqrtAddToTable(const std::string& name = Sqrt::typeName) {
-    Function1RTStable.insert(std::pair<std::string, Function1Ptr>(name, Sqrt_factory));
-  }
-};
-
-class CubicAddToTable {
- public:
-  CubicAddToTable(const std::string& name = Cubic::typeName) {
-    Function1RTStable.insert(std::pair<std::string, Function1Ptr>(name, Cubic_factory));
-  }
-};
-
 const std::string Function1::typeName = Function1::typeName_;
+Function1::Function1Table Function1::Function1RTStable;
 
 const std::string Sqr::typeName = Sqr::typeName_;
-SqrAddToTable SqrDelegator(Sqr::typeName);
+Function1::AddToTable<Sqr> SqrDelegator;
 
 const std::string Sqrt::typeName = Sqrt::typeName_;
-SqrtAddToTable SqrtDelegator(Sqrt::typeName);
+Function1::AddToTable<Sqrt> SqrtDelegator;
 
 const std::string Cubic::typeName = Cubic::typeName_;
-CubicAddToTable CubicDelegator(Cubic::typeName);
+Function1::AddToTable<Cubic> CubicDelegator;
 
 int main(int argc, char** argv) {
   std::cout << "Function1RTStable" << std::endl;
-  for (auto iter = Function1RTStable.begin(); iter != Function1RTStable.end(); ++iter) {
-    std::cout << "Key: " << iter->first << " -> ";
-    iter->second();
+  for (auto iter = Function1::Function1RTStable.begin(); iter != Function1::Function1RTStable.end(); ++iter) {
+    std::cout << "Key: " << iter->first << std::endl;
   }
 
   float x;
@@ -119,7 +96,7 @@ int main(int argc, char** argv) {
   std::cin >> choice;
   std::cout << "Input value: " << x << std::endl;
 
-  std::unique_ptr<Function1> func = Function1RTStable[choice]();
+  std::unique_ptr<Function1> func = Function1::Function1RTStable[choice]();
   std::cout << "Function call: " << (*func)(x) << std::endl;
 
   return 0;
