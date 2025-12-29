@@ -4,6 +4,50 @@
 #include <memory>
 #include <string>
 
+#define TypeName(TypeNameString)                             \
+  static const char* typeName_() { return TypeNameString; }  \
+  static const std::string typeName;                         \
+  virtual const std::string& type() { return typeName; }
+
+#define TypeNameDerived(TypeNameString)                      \
+  static const char* typeName_() { return TypeNameString; }  \
+  static const std::string typeName;                         \
+  virtual const std::string& type() override { return typeName; }
+
+#define defineTypeName(thisType)  \
+  const std::string thisType::typeName(thisType::typeName_());
+
+#define declareRTSTable(baseType, argName)                                         \
+  using baseType##Constructor = std::unique_ptr<baseType>(*)();                    \
+  using baseType##ConstructorTable = std::map<std::string, baseType##Constructor>; \
+  static baseType##ConstructorTable* baseType##ConstructorTable_;                  \
+  template <class baseType##Type>                                                  \
+    class add##argName##ToConstructorTable                                         \
+    {                                                                              \
+     public:                                                                       \
+      static std::unique_ptr<baseType> New()                                       \
+      {                                                                            \
+        return std::unique_ptr<baseType>(new baseType##Type());                    \
+      }                                                                            \
+      add##argName##ToConstructorTable(                                            \
+        const std::string& name = baseType##Type::typeName )                       \
+      {                                                                            \
+        if ( baseType##ConstructorTable_ == nullptr )                              \
+        {                                                                          \
+          baseType::baseType##ConstructorTable_                                    \
+            = new baseType::baseType##ConstructorTable();                          \
+        }                                                                          \
+        baseType::baseType##ConstructorTable_->insert(                             \
+          std::pair<std::string, baseType##Constructor>(name, New));               \
+      }                                                                            \
+    };
+
+#define defineRTSTable(baseType)  \
+  baseType::baseType##ConstructorTable* baseType::baseType##ConstructorTable_ = nullptr;
+
+#define addRTSTable(baseType, argName, thisType)  \
+  baseType::add##argName##ToConstructorTable<thisType> add##thisType##ToConstructorTable_;
+
 class Function1 {
  public:
   Function1() = default;
@@ -11,24 +55,18 @@ class Function1 {
 
   virtual float operator()(float x) = 0;
 
-  static constexpr const char* typeName_{"Function1"};
-  static const std::string typeName;
+  TypeName("Function1")
 
-  using Function1Ptr = std::unique_ptr<Function1>(*)();
-  using Function1Table = std::map<std::string, Function1Ptr>;
-  static Function1Table Function1RTStable;
+  declareRTSTable(Function1, Object)
 
-  template <typename derivedType>
-  class AddToTable {
-  public:
-    static std::unique_ptr<Function1> factory() {
-      return std::unique_ptr<Function1>(new derivedType());
+  static std::unique_ptr<Function1> New(const std::string& name) {
+    auto iter = Function1::Function1ConstructorTable_->find(name);
+    if (iter == Function1::Function1ConstructorTable_->end()) {
+      std::cerr << "Failed to fine " << name << std::endl;
+      return nullptr;
     }
-
-    AddToTable(const std::string& name = derivedType::typeName) {
-      Function1::Function1RTStable.insert(std::pair<std::string, Function1Ptr>(name, factory));
-    }
-  };
+    return iter->second();
+  }
 };
 
 class Sqr : public Function1 {
@@ -40,8 +78,7 @@ class Sqr : public Function1 {
     return x * x;
   }
 
-  static constexpr const char* typeName_{"sqr"};
-  static const std::string typeName;
+  TypeNameDerived("sqr")
 };
 
 class Sqrt : public Function1 {
@@ -53,8 +90,7 @@ class Sqrt : public Function1 {
     return std::sqrt(x);
   }
 
-  static constexpr const char* typeName_{"sqrt"};
-  static const std::string typeName;
+  TypeNameDerived("sqrt")
 };
 
 class Cubic : public Function1 {
@@ -66,25 +102,26 @@ class Cubic : public Function1 {
     return x * x * x;
   }
 
-  static constexpr const char* typeName_{"cubic"};
-  static const std::string typeName;
+  TypeNameDerived("cubic")
 };
 
-const std::string Function1::typeName = Function1::typeName_;
-Function1::Function1Table Function1::Function1RTStable;
+defineTypeName(Function1)
+defineRTSTable(Function1)
 
-const std::string Sqr::typeName = Sqr::typeName_;
-Function1::AddToTable<Sqr> SqrDelegator;
+defineTypeName(Sqr)
+addRTSTable(Function1, Object, Sqr)
 
-const std::string Sqrt::typeName = Sqrt::typeName_;
-Function1::AddToTable<Sqrt> SqrtDelegator;
+defineTypeName(Sqrt)
+addRTSTable(Function1, Object, Sqrt)
 
-const std::string Cubic::typeName = Cubic::typeName_;
-Function1::AddToTable<Cubic> CubicDelegator;
+defineTypeName(Cubic)
+addRTSTable(Function1, Object, Cubic)
 
 int main(int argc, char** argv) {
   std::cout << "Function1RTStable" << std::endl;
-  for (auto iter = Function1::Function1RTStable.begin(); iter != Function1::Function1RTStable.end(); ++iter) {
+  for (auto iter = Function1::Function1ConstructorTable_->begin();
+       iter != Function1::Function1ConstructorTable_->end();
+       ++iter) {
     std::cout << "Key: " << iter->first << std::endl;
   }
 
@@ -96,7 +133,7 @@ int main(int argc, char** argv) {
   std::cin >> choice;
   std::cout << "Input value: " << x << std::endl;
 
-  std::unique_ptr<Function1> func = Function1::Function1RTStable[choice]();
+  std::unique_ptr<Function1> func = Function1::New(choice);
   std::cout << "Function call: " << (*func)(x) << std::endl;
 
   return 0;
