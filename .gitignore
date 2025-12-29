@@ -7,3 +7,6 @@ main
 coeffs.dat
 solutions.dat
 sources.dat
+
+# Library files
+*.so
